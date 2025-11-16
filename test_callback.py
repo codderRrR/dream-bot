@@ -9,7 +9,7 @@ def test_vk_callback():
     # ТЕСТ ПОДТВЕРЖДЕНИЯ
     confirmation_url = "http://localhost:8000/vk_callback"
     test_params = {
-        "confirmation_token": "f2fb82fd",
+        "confirmation_token": "75eda98a",
         "group_id": "123456"
     }
     
@@ -18,10 +18,10 @@ def test_vk_callback():
         print(f"✅ Confirmation Response: {response.status_code}")
         print(f"✅ Response Text: {response.text}")
         
-        if response.text == "f2fb82fd":
+        if response.text == "75eda98a":
             print("🎉 CONFIRMATION SUCCESS! VK callback настроен правильно!")
         else:
-            print(f"❌ CONFIRMATION FAILED! Expected 'f2fb82fd', got '{response.text}'")
+            print(f"❌ CONFIRMATION FAILED! Expected '75eda98a', got '{response.text}'")
             
     except Exception as e:
         print(f"❌ Error testing callback: {e}")

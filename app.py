@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 VK_GROUP_TOKEN = os.getenv("VK_GROUP_TOKEN")
 # УБИРАЕМ ПОДТВЕРЖДЕНИЕ ИЗ FLASK - ОНО ТОЛЬКО В FASTAPI!
-CONFIRMATION_TOKEN = "f2fb82fd"  # ОСТАВЛЯЕМ ДЛЯ СОВМЕСТИМОСТИ
+CONFIRMATION_TOKEN = "75eda98a"  # ОСТАВЛЯЕМ ДЛЯ СОВМЕСТИМОСТИ
 
 @app.route('/ping')
 def ping():

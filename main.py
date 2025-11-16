@@ -9,9 +9,6 @@ from fastapi import FastAPI, Request, Response
 from contextlib import asynccontextmanager
 import uvicorn
 
-# Импортируем VKBot
-from vk_bot import VKBot
-
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
@@ -22,7 +19,7 @@ logging.basicConfig(
 vk_bot = None
 
 # VK CONFIRMATION TOKEN
-VK_CONFIRMATION_TOKEN = "f2fb82fd"
+VK_CONFIRMATION_TOKEN = "75eda98a"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -32,7 +29,9 @@ async def lifespan(app: FastAPI):
     try:
         logging.info("🚀 Запуск Dream Interpretation Bot...")
         
-        # Инициализация VK Bot
+        # Инициализация VK Bot - ИМПОРТ ВНУТРИ ФУНКЦИИ
+        from vk_bot import VKBot
+        
         vk_token = "vk1.a.ztt5kCO4D6hZvJ0aOEXmfJGGiotGrxcBl1p_mMjX38NGO__ocfcjYGwgfWMyOl9L1xBMtmPrV3_-a8r6KhArKEApacDOQKK5smaW95bJ7iBtmu7ts1VxxPSX7ompZYcDOrKCJc-oSdlKJxxn2ft0m_f2ohroTubQNXEYKIq8Fi9LrVmeiG3Mcq_1jDt8dxFBlwrTwABHOuFuFAJLh4RjcQ"  
         vk_bot = VKBot(vk_token)
         logging.info("✅ VK Bot инициализирован")
