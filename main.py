@@ -1,262 +1,165 @@
-from fastapi import FastAPI, HTTPException, Request
-from pydantic import BaseModel
-import sqlite3
+# main.py - УСКОРЕННАЯ ВЕРСИЯ С LIFESPAN
+
+import logging
 import os
+import time
+import asyncio
 from datetime import datetime
-from gigachat_api import gigachat
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response
-from vk_bot import VKBot
-from dotenv import load_dotenv
+from fastapi import FastAPI, Request, Response
+from contextlib import asynccontextmanager
 import uvicorn
 
-load_dotenv()
+# Импортируем VKBot
+from vk_bot import VKBot
 
-app = FastAPI(title="ИИ Сонник", description="Психологическая интерпретация снов")
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
-# Монтируем статические файлы
-if os.path.exists("static"):
-    app.mount("/static", StaticFiles(directory="static"), name="static")
-    print("✅ Статические файлы подключены")
-else:
-    print("⚠️ Папка static не найдена")
+# Глобальные переменные для бота
+vk_bot = None
 
-# Инициализация VK бота
-VK_GROUP_TOKEN = os.getenv("VK_GROUP_TOKEN")
-if VK_GROUP_TOKEN:
-    vk_bot = VKBot(VK_GROUP_TOKEN)
-    print("✅ VK Bot инициализирован")
-else:
-    vk_bot = None
-    print("⚠️ VK_GROUP_TOKEN не найден")
+# VK CONFIRMATION TOKEN
+VK_CONFIRMATION_TOKEN = "f2fb82fd"
 
-# 🔥 КОНСТАНТЫ VK
-CONFIRMATION_TOKEN = "6da970f6"
-
-# 🔥 ПРОСТОЙ WEBHOOK ДЛЯ БЫСТРОГО ТЕСТА
-@app.get("/vk_simple")
-async def vk_simple_webhook(user_id: int, text: str = "привет"):
-    """Простой webhook через GET для тестирования"""
-    if vk_bot is None:
-        return {"error": "VK bot not initialized"}
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    global vk_bot
     
-    print(f"🔧 Simple webhook: user_id={user_id}, text='{text}'")
-    
-    response_text = vk_bot.handle_message(user_id, text)
-    sent = vk_bot.send_message(user_id, response_text)
-    
-    return {
-        "status": "success" if sent else "error",
-        "user_id": user_id,
-        "original_text": text,
-        "response": response_text,
-        "sent": sent
-    }
-
-# 🔥 ТЕСТОВЫЙ ЭНДПОИНТ ДЛЯ РУЧНОЙ ОТПРАВКИ
-@app.get("/send_vk")
-async def send_vk_message(user_id: int, message: str = "тест"):
-    """Ручная отправка сообщения в VK"""
-    if vk_bot is None:
-        return {"status": "error", "message": "VK bot not initialized"}
-    
-    print(f"🔧 Ручная отправка: user_id={user_id}, message='{message}'")
-    sent = vk_bot.send_message(user_id, message)
-    
-    return {
-        "status": "success" if sent else "error",
-        "user_id": user_id,
-        "message": message,
-        "sent": sent
-    }
-
-# 🔥 ТЕСТ VK БОТА
-@app.get("/test_vk")
-async def test_vk(user_id: int, message: str = "привет"):
-    """Тестирование VK бота"""
-    if vk_bot is None:
-        return {"status": "error", "message": "VK bot not initialized"}
-    
-    print(f"🔧 Тест VK: user_id={user_id}, message='{message}'")
-    
-    response_text = vk_bot.handle_message(user_id, message)
-    print(f"🔧 Ответ бота: '{response_text}'")
-    
-    keyboard = vk_bot.get_default_keyboard()
-    sent = vk_bot.send_message(user_id, response_text, keyboard)
-    
-    return {
-        "status": "success",
-        "user_id": user_id,
-        "response": response_text,
-        "sent": sent,
-        "message": "Проверьте сообщения в VK!"
-    }
-
-# 🔥 ИСПРАВЛЕННЫЙ CALLBACK ДЛЯ VK
-@app.api_route("/vk_callback", methods=["GET", "POST"])
-async def vk_callback(request: Request):
-    """Callback API для VK"""
-    print(f"🔥 VK CALLBACK: {request.method}")
-    
-    # GET запрос - подтверждение сервера
-    if request.method == "GET":
-        params = dict(request.query_params)
-        print(f"🔥 GET PARAMS: {params}")
-        
-        if params.get("type") == "confirmation":
-            print(f"🔥 RETURNING CONFIRMATION: {CONFIRMATION_TOKEN}")
-            return Response(content=CONFIRMATION_TOKEN, media_type="text/plain")
-        
-        return Response(content="ok", media_type="text/plain")
-    
-    # POST запрос - обработка событий
     try:
-        data = await request.json()
-        print(f"🔥 POST DATA: {data}")
+        logging.info("🚀 Запуск Dream Interpretation Bot...")
         
-        if data.get("type") == "confirmation":
-            print(f"🔥 CONFIRMATION IN POST: {CONFIRMATION_TOKEN}")
-            return Response(content=CONFIRMATION_TOKEN, media_type="text/plain")
+        # Инициализация VK Bot
+        vk_token = "vk1.a.ztt5kCO4D6hZvJ0aOEXmfJGGiotGrxcBl1p_mMjX38NGO__ocfcjYGwgfWMyOl9L1xBMtmPrV3_-a8r6KhArKEApacDOQKK5smaW95bJ7iBtmu7ts1VxxPSX7ompZYcDOrKCJc-oSdlKJxxn2ft0m_f2ohroTubQNXEYKIq8Fi9LrVmeiG3Mcq_1jDt8dxFBlwrTwABHOuFuFAJLh4RjcQ"  
+        vk_bot = VKBot(vk_token)
+        logging.info("✅ VK Bot инициализирован")
         
-        # Новое сообщение
-        elif data.get("type") == "message_new":
-            message_data = data["object"]["message"]
-            user_id = message_data["from_id"]
-            text = message_data["text"]
-            
-            print(f"🔧 Новое сообщение VK от {user_id}: '{text}'")
-            
-            if vk_bot:
-                response_text = vk_bot.handle_message(user_id, text)
-                keyboard = vk_bot.get_default_keyboard()
-                sent = vk_bot.send_message(user_id, response_text, keyboard)
-                print(f"🔧 Ответ отправлен в VK: {sent}")
-        
-        return Response(content="ok", media_type="text/plain")
-        
+        logging.info("🔥 Бот запущен и готов к работе!")
+        yield
     except Exception as e:
-        print(f"❌ VK Callback error: {e}")
-        return Response(content="ok", media_type="text/plain")
+        logging.error(f"❌ Ошибка инициализации: {e}")
+        raise
+    finally:
+        # Shutdown
+        logging.info("🛑 Остановка бота...")
 
-# 🔥 ТЕСТ ПОДТВЕРЖДЕНИЯ
-@app.get("/vk_test_confirm")
-async def vk_test_confirm():
-    """Тестовый эндпоинт для проверки подтверждения"""
-    print("🔥 VK CONFIRMATION TEST ENDPOINT HIT!")
-    return Response(content="6da970f6", media_type="text/plain")
-
-# 🔥 ПРОВЕРКА СЕРВЕРА
-@app.get("/ping")
-async def ping():
-    return {"status": "alive", "message": "Сервер работает!"}
-
-# ОСНОВНОЙ ФУНКЦИОНАЛ
-class DreamRequest(BaseModel):
-    user_id: str
-    dream_text: str
-    user_name: str = "Аноним"
-    is_follow_up: bool = False
-
-def init_db():
-    conn = sqlite3.connect('dreams.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY,
-            user_id TEXT UNIQUE,
-            name TEXT,
-            birth_date TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS dreams (
-            id INTEGER PRIMARY KEY,
-            user_id TEXT,
-            dream_text TEXT,
-            interpretation TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (user_id)
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-@app.post("/interpret")
-async def interpret_dream(request: DreamRequest):
-    try:
-        if request.is_follow_up:
-            enhanced_prompt = f"Пользователь хочет более глубокого анализа предыдущего сна: {request.dream_text}. Дай развернутый психологический анализ."
-        else:
-            enhanced_prompt = request.dream_text
-        
-        interpretation = gigachat.interpret_dream(
-            dream_text=enhanced_prompt,
-            user_name=request.user_name,
-            user_context=f"ID: {request.user_id}"
-        )
-        
-        conn = sqlite3.connect('dreams.db')
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT OR IGNORE INTO users (user_id, name) VALUES (?, ?)",
-            (request.user_id, request.user_name)
-        )
-        cursor.execute(
-            "INSERT INTO dreams (user_id, dream_text, interpretation) VALUES (?, ?, ?)",
-            (request.user_id, request.dream_text, interpretation)
-        )
-        conn.commit()
-        conn.close()
-        
-        return {"interpretation": interpretation}
-    
-    except Exception as e:
-        print(f"❌ Interpretation error: {e}")
-        return {"interpretation": "❌ Ошибка при обработке сна"}
-
-@app.get("/history/{user_id}")
-async def get_history(user_id: str):
-    try:
-        conn = sqlite3.connect('dreams.db')
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT dream_text, interpretation, timestamp FROM dreams WHERE user_id = ? ORDER BY timestamp DESC LIMIT 10",
-            (user_id,)
-        )
-        dreams = cursor.fetchall()
-        conn.close()
-        return {"dreams": dreams}
-    except Exception as e:
-        print(f"❌ History error: {e}")
-        return {"dreams": []}
+# Инициализация FastAPI с lifespan
+app = FastAPI(title="Dream Interpretation Bot", lifespan=lifespan)
 
 @app.get("/")
 async def root():
-    if os.path.exists("static/index.html"):
-        return FileResponse("static/index.html")
-    else:
-        return {
-            "message": "🔮 ИИ Сонник API работает!",
-            "endpoints": {
-                "vk_simple": "GET /vk_simple?user_id=123&text=привет",
-                "send_vk": "GET /send_vk?user_id=123&message=текст",
-                "test_vk": "GET /test_vk?user_id=123&message=текст",
-                "ping": "GET /ping",
-                "vk_test_confirm": "GET /vk_test_confirm"
-            },
-            "vk_status": "initialized" if vk_bot else "not_initialized"
-        }
+    """Корневой маршрут"""
+    return {"status": "online", "service": "Dream Interpretation Bot"}
 
-@app.on_event("startup")
-async def startup_event():
-    init_db()
-    print("✅ База данных инициализирована")
+@app.get("/ping")
+async def ping():
+    """Проверка работы сервера"""
+    return {"status": "alive", "message": "Сервер работает!"}
 
-if __name__ == "__main__":
+async def send_message_async(user_id: int, message: str, keyboard: dict = None):
+    """Асинхронная отправка сообщения"""
     try:
-        uvicorn.run(app, host="0.0.0.0", port=8000)
-    except KeyboardInterrupt:
-        print("\n✅ Сервер остановлен!")
-        os._exit(0)
+        if vk_bot:
+            await asyncio.to_thread(vk_bot.send_message, user_id, message, keyboard)
+    except Exception as e:
+        logging.error(f"❌ Ошибка отправки сообщения: {e}")
+
+@app.api_route("/vk_callback", methods=["GET", "POST"])
+async def vk_callback(request: Request):
+    """УСКОРЕННЫЙ обработчик callback от VK"""
+    start_time = time.time()
+    
+    try:
+        # ДЛЯ GET ЗАПРОСА (ПОДТВЕРЖДЕНИЕ) - СУПЕРБЫСТРО
+        if request.method == "GET":
+            params = dict(request.query_params)
+            
+            if params.get("confirmation_token") == VK_CONFIRMATION_TOKEN:
+                logging.info(f"✅ Быстрое подтверждение за {time.time() - start_time:.3f} сек")
+                return Response(content=VK_CONFIRMATION_TOKEN, media_type="text/plain")
+            else:
+                logging.error(f"❌ Неверный токен подтверждения: {params.get('confirmation_token')}")
+                return Response(content="invalid token", status_code=400)
+        
+        # ДЛЯ POST ЗАПРОСА (СООБЩЕНИЯ)
+        elif request.method == "POST":
+            data = await request.json()
+            
+            # ПРОВЕРЯЕМ ТИП СОБЫТИЯ
+            if data.get("type") == "confirmation":
+                logging.info("✅ Подтверждение от VK")
+                return Response(content=VK_CONFIRMATION_TOKEN, media_type="text/plain")
+            
+            elif data.get("type") == "message_new":
+                message_data = data["object"]["message"]
+                user_id = message_data["from_id"]
+                text = message_data.get("text", "")
+                attachments = message_data.get("attachments", [])
+                
+                logging.info(f"🔧 Новое сообщение от {user_id}: '{text}' | Вложения: {len(attachments)}")
+                
+                if vk_bot:
+                    # БЫСТРАЯ ОБРАБОТКА
+                    response_text, keyboard = vk_bot.process_message(user_id, text, attachments)
+                    
+                    # АСИНХРОННАЯ ОТПРАВКА ОТВЕТА
+                    if response_text and response_text.strip():
+                        # Запускаем отправку в фоне чтобы не блокировать ответ
+                        asyncio.create_task(
+                            send_message_async(user_id, response_text, keyboard)
+                        )
+                    else:
+                        logging.warning("⚠️ Пустой ответ от бота")
+                
+                total_time = time.time() - start_time
+                logging.info(f"✅ Callback обработан за {total_time:.3f} сек")
+                return Response(content='ok', media_type="text/plain")
+            
+            # ДЛЯ ЛЮБОГО ДРУГОГО СОБЫТИЯ
+            logging.info(f"🔧 Другое событие VK: {data.get('type')}")
+            return Response(content='ok', media_type="text/plain")
+        
+    except Exception as e:
+        logging.error(f"❌ VK Callback error: {e}")
+        import traceback
+        logging.error(f"❌ Traceback: {traceback.format_exc()}")
+        return Response(content='ok', media_type="text/plain")
+
+# ДОПОЛНИТЕЛЬНЫЕ МАРШРУТЫ ДЛЯ МОНИТОРИНГА
+@app.get("/status")
+async def status():
+    """Статус системы"""
+    return {
+        "status": "online",
+        "service": "Dream Interpretation Bot", 
+        "timestamp": time.time(),
+        "vk_bot_initialized": vk_bot is not None
+    }
+
+@app.get("/health")
+async def health_check():
+    """Health check для мониторинга"""
+    return {
+        "status": "healthy",
+        "database": "connected" if vk_bot and hasattr(vk_bot, 'conn') else "disconnected",
+        "gigachat": "available",
+        "timestamp": datetime.now().isoformat()
+    }
+
+if __name__ == '__main__':
+    # Запуск сервера
+    port = int(os.getenv("PORT", 8000))
+    host = os.getenv("HOST", "0.0.0.0")
+    
+    logging.info(f"🚀 Starting server on {host}:{port}")
+    logging.info(f"🔑 VK Confirmation Token: {VK_CONFIRMATION_TOKEN}")
+    
+    uvicorn.run(
+        "main:app",
+        host=host,
+        port=port,
+        reload=True
+    )

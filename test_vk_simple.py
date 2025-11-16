@@ -1,12 +1,31 @@
+# test_vk_simple.py - простая проверка VK бота
+import sys
+import os
+sys.path.append(os.path.dirname(__file__))
+
 from vk_bot import VKBot
 
-# Прямое тестирование
-vk = VKBot("vk1.a.K_Sth5UQhK8Qu5fzlHnmCnMEVt_CbOzhQYNhl93BIzypJ1RZuiGE5pLJ6-Sae2ghchmMA9Ulq7VhNkHoGkvzHlUCX-nY4JfjvPeH-L3l9lzZGL09iYwz-XTAPUXToLZpZMZrRNdVrmD4Mwj2is05CJrhyBznBVaWDtHUviyM71bslN7WXWm4Z5QTOBtVkplaGrt9RrmkjIiI6Lld0h2m-Q")
+def simple_test():
+    print("🧪 Простой тест VK Bot...")
+    
+    bot = VKBot("test_token")
+    
+    # Тест основных функций
+    test_cases = [
+        (822018853, "привет"),
+        (822018853, "📖 Интерпретировать сон"),
+        (822018853, "👑 Админка"),
+    ]
+    
+    for user_id, message in test_cases:
+        print(f"🔧 Тест: '{message}'")
+        try:
+            response, keyboard = bot.process_message(user_id, message)
+            print(f"✅ Успех: {response[:50]}...")
+        except Exception as e:
+            print(f"❌ Ошибка: {e}")
+    
+    print("🎯 Простой тест завершен!")
 
-print("🔧 Тестируем обработку сообщения...")
-response = vk.handle_message(822018853, "привет")
-print(f"Ответ: {response}")
-
-print("🔧 Тестируем отправку сообщения...")
-result = vk.send_message(822018853, "Тест из Python!")
-print(f"Результат отправки: {result}")
+if __name__ == "__main__":
+    simple_test()
